@@ -82,7 +82,7 @@ No dashboard, uma vez só, para conectar o repositório:
 O `wrangler.toml` cuida do resto. Deixe **Build command vazio** — este projeto
 não tem build. Cada push na branch conectada vira um deploy.
 
-O endereço sai na forma `https://vitanova-acesso.<subdominio>.workers.dev`, e a
+O endereço sai na forma `https://vitanova-exclusivos.joaoreche9.workers.dev`, e a
 página fica em `/acesso/<token>`. A raiz é 404 de propósito.
 
 Pelo terminal, se preferir: `npx wrangler login && npx wrangler deploy`.
@@ -90,7 +90,7 @@ Pelo terminal, se preferir: `npx wrangler login && npx wrangler deploy`.
 ## Conferindo depois de publicar
 
 ```sh
-HOST=https://vitanova-acesso.<subdominio>.workers.dev
+HOST=https://vitanova-exclusivos.joaoreche9.workers.dev
 TOKEN=<o token que o npm run turma imprimiu>
 
 curl -s -o /dev/null -w "pagina:  %{http_code}\n" "$HOST/acesso/$TOKEN"  # 200
@@ -115,7 +115,7 @@ ainda é o da turma passada. Confirme que o push subiu e que o deploy terminou.
 Para saber qual é:
 
 ```sh
-curl -i https://<seu-worker>.workers.dev/robots.txt
+curl -i https://vitanova-exclusivos.joaoreche9.workers.dev/robots.txt
 ```
 
 - **200** com `Disallow: /acesso/` → Worker saudável; é caminho ou deploy velho.

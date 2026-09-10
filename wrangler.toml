@@ -1,0 +1,12 @@
+name = "vitanova-acesso"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+# Sem build, sem dependências: o HTML aprovado entra no bundle como texto.
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false
+
+# O token NÃO fica aqui. É um secret:
+#   npx wrangler secret put ACCESS_TOKEN

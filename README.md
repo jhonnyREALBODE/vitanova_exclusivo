@@ -1,0 +1,122 @@
+# Vita Nova — página de acesso da turma
+
+Página de acesso pós-compra: para onde a compradora é enviada depois que o
+pagamento é aprovado na Cakto. O link vai no e-mail de entrega e leva ao grupo
+fechado da turma no WhatsApp.
+
+HTML puro, sem build e sem dependências. Servido por um Worker do Cloudflare
+que existe só para três coisas: esconder a página atrás de um caminho secreto,
+mandar os headers certos e devolver 404 em todo o resto.
+
+## Como funciona a proteção
+
+São arquivos estáticos: não há como validar compra. A proteção é o caminho ser
+secreto.
+
+- Só `/acesso/<token>` responde 200. Todo o resto — inclusive `/acesso`,
+  `/acesso/` e tokens errados — dá 404.
+- **O token não fica no repositório.** Ele é um secret do Cloudflare
+  (`ACCESS_TOKEN`). Este repo é público: se o token estivesse num caminho de
+  arquivo, qualquer pessoa leria ele aqui no GitHub, e a proteção acabava.
+- A comparação do token é em tempo constante.
+- `Referrer-Policy: no-referrer` — sem isso o token vazaria no header `Referer`
+  no momento em que a compradora clica no botão do WhatsApp.
+- `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex` em toda
+  resposta, além do `noindex` que já existe no HTML.
+- `robots.txt` bloqueia `/acesso/` e `/`. Ele revela o prefixo, nunca o token.
+- Nenhum índice é publicado: não existe página em `/` que liste caminhos.
+
+## Cache
+
+`Cache-Control: private, no-cache, no-store, must-revalidate, max-age=0`.
+
+O link muda a cada turma. Nada pode ficar preso em cache intermediário, senão
+uma compradora nova recebe a página da turma anterior — com o link do grupo
+errado.
+
+## Estrutura
+
+```
+page/index.html   a página aprovada (não alterar conteúdo, textos, design ou animação)
+src/worker.js     roteamento, token e headers
+wrangler.toml     configuração do Worker
+```
+
+## Deploy
+
+Uma vez, na conta do Cloudflare:
+
+```sh
+npx wrangler login
+npx wrangler secret put ACCESS_TOKEN   # cola o token quando pedir
+npx wrangler deploy
+```
+
+---
+
+## Abrindo uma turma nova
+
+Duas coisas mudam a cada turma: **o link do grupo** e **o token**. Sempre as
+duas — token novo garante que quem tem o link da turma passada perde o acesso.
+
+### 1. Trocar o link do grupo
+
+O link vive dentro de `page/index.html`, no botão principal. Procure por
+`chat.whatsapp.com`:
+
+```sh
+grep -n "chat.whatsapp.com" page/index.html
+```
+
+Troque a URL pelo convite do grupo novo. Não mexa em mais nada do arquivo — a
+página está aprovada.
+
+### 2. Gerar e trocar o token
+
+```sh
+node -e "const c=require('crypto'),A='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(const x of c.randomBytes(26))s+=A[x%A.length];console.log(s)"
+```
+
+Guarde o que sair. Depois:
+
+```sh
+npx wrangler secret put ACCESS_TOKEN   # cola o token novo
+```
+
+### 3. Publicar
+
+```sh
+npx wrangler deploy
+```
+
+O secret vale na hora. O `deploy` só é necessário se você mexeu no HTML ou no
+worker — trocar só o token não pede deploy.
+
+### 4. Conferir antes de mandar o e-mail
+
+```sh
+TOKEN=<token novo>
+HOST=https://vitanova-acesso.<seu-subdominio>.workers.dev
+
+curl -s -o /dev/null -w "pagina:  %{http_code}\n" "$HOST/acesso/$TOKEN"   # 200
+curl -s -o /dev/null -w "prefixo: %{http_code}\n" "$HOST/acesso"          # 404
+curl -s -o /dev/null -w "errado:  %{http_code}\n" "$HOST/acesso/errado"   # 404
+curl -s -o /dev/null -w "antigo:  %{http_code}\n" "$HOST/acesso/<token antigo>"  # 404
+```
+
+Abra `/acesso/$TOKEN` no celular e confirme: a animação roda, o botão leva ao
+grupo certo, e cabe na tela sem rolagem.
+
+### 5. Atualizar o e-mail de entrega na Cakto
+
+O link novo é `https://.../acesso/<token novo>`. Enquanto o e-mail apontar para
+o token antigo, as compradoras novas caem num 404.
+
+## Teste local
+
+```sh
+echo "ACCESS_TOKEN=$(node -e "const c=require('crypto'),A='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(const x of c.randomBytes(26))s+=A[x%A.length];console.log(s)")" > .dev.vars
+npx wrangler dev --local
+```
+
+`.dev.vars` está no `.gitignore` e nunca vai para o repositório.

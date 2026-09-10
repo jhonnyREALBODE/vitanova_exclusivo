@@ -1,0 +1,9 @@
+{
+  "name": "vitanova-acesso",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "turma": "node turma.mjs",
+    "dev": "wrangler dev --local"
+  }
+}

@@ -2,11 +2,21 @@ name = "vitanova-acesso"
 main = "src/worker.js"
 compatibility_date = "2026-09-01"
 
+# ==========================================================================
+#  TROCAR A CADA TURMA — só esta linha muda.
+#
+#  Não é o token: é o SHA-256 dele. Hash não abre a página, então pode ficar
+#  no repositório público sem risco. O token de verdade nunca é versionado.
+#
+#  Para trocar:  npm run turma
+#  O script gera o token novo, escreve o hash aqui e imprime a URL.
+#  Depois: git commit -am "turma nova" && git push  — e acabou.
+# ==========================================================================
+[vars]
+ACCESS_TOKEN_SHA256 = "514642102675039b47b13ca1d6d7bb5c84aa2ee9cd0e713c3dc6ccdf2300e1fe"
+
 # Sem build, sem dependências: o HTML aprovado entra no bundle como texto.
 [[rules]]
 type = "Text"
 globs = ["**/*.html"]
 fallthrough = false
-
-# O token NÃO fica aqui. É um secret:
-#   npx wrangler secret put ACCESS_TOKEN

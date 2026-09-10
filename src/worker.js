@@ -2,8 +2,12 @@
  * Vita Nova — página de acesso da turma paga.
  *
  * A página é estática e não tem como validar compra. A proteção é o caminho
- * ser secreto: só /acesso/<token> responde 200, e o token vive num secret do
- * Cloudflare (ACCESS_TOKEN), nunca no repositório — este repo é público.
+ * ser secreto: só /acesso/<token> responde 200.
+ *
+ * O repositório guarda apenas o SHA-256 do token (em wrangler.toml). O Worker
+ * faz o hash do que vier na URL e compara. Hash não abre a página, então o
+ * repo pode ser público e nada precisa ser configurado no dashboard: o token
+ * de verdade só existe no e-mail de entrega e no bolso de quem comprou.
  *
  * Qualquer outro caminho, inclusive /acesso e /acesso/<token errado>, dá 404.
  */
@@ -23,8 +27,18 @@ Disallow: /acesso/
 Disallow: /
 `;
 
-/** Comparação em tempo constante, para o token não vazar por timing. */
-function tokenMatches(a, b) {
+const HEX = "0123456789abcdef";
+
+async function sha256Hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  const b = new Uint8Array(buf);
+  let out = "";
+  for (let i = 0; i < b.length; i++) out += HEX[b[i] >> 4] + HEX[b[i] & 15];
+  return out;
+}
+
+/** Comparação em tempo constante, para o hash não vazar por timing. */
+function sameHex(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -32,9 +46,9 @@ function tokenMatches(a, b) {
   return diff === 0;
 }
 
-function notFound() {
-  return new Response("Not found", {
-    status: 404,
+function textResponse(body, status) {
+  return new Response(body, {
+    status,
     headers: {
       "content-type": "text/plain; charset=utf-8",
       "x-robots-tag": NOINDEX,
@@ -42,6 +56,8 @@ function notFound() {
     },
   });
 }
+
+const notFound = () => textResponse("Not found", 404);
 
 export default {
   async fetch(request, env) {
@@ -56,52 +72,39 @@ export default {
     }
 
     if (path === "/robots.txt") {
-      return new Response(ROBOTS, {
-        headers: {
-          "content-type": "text/plain; charset=utf-8",
-          "x-robots-tag": NOINDEX,
-          "cache-control": NO_CACHE,
-        },
-      });
+      return textResponse(ROBOTS, 200);
     }
 
-    const token = env.ACCESS_TOKEN;
-    if (!token) {
-      /* Sem o secret nada é servido — mas responder 404 aqui faz o erro de
-         configuração parecer token errado, e a pessoa fica caçando o token
-         quando o problema é outro. 503 diz o que é. Não vaza nada: a mensagem
-         não contém o token, e some assim que o secret é gravado. */
-      console.error("ACCESS_TOKEN não configurado — nenhuma página será servida.");
-      return new Response(
-        "Worker no ar, mas o secret ACCESS_TOKEN nao foi configurado.\n" +
-          "Cloudflare > Workers & Pages > vitanova-acesso > Settings >\n" +
-          "Variables and Secrets > Add > tipo Secret > nome ACCESS_TOKEN.\n" +
-          "Ou: npx wrangler secret put ACCESS_TOKEN\n",
-        {
-          status: 503,
-          headers: {
-            "content-type": "text/plain; charset=utf-8",
-            "x-robots-tag": NOINDEX,
-            "cache-control": NO_CACHE,
-          },
-        }
+    const expected = (env.ACCESS_TOKEN_SHA256 || "").trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(expected)) {
+      /* Só acontece se alguém apagar ou estragar a linha do wrangler.toml.
+         404 aqui faria parecer token errado, e a pessoa iria caçar o token
+         quando o problema é outro. Não vaza nada: é um hash que falta. */
+      console.error("ACCESS_TOKEN_SHA256 ausente ou inválido em wrangler.toml.");
+      return textResponse(
+        "ACCESS_TOKEN_SHA256 ausente ou invalido em wrangler.toml.\n" +
+          "Rode: npm run turma\n",
+        503
       );
     }
 
     // Aceita /acesso/<token> e /acesso/<token>/ e nada mais.
     if (path.startsWith(PREFIX)) {
       const rest = path.slice(PREFIX.length).replace(/\/$/, "");
-      if (tokenMatches(rest, token)) {
-        return new Response(PAGE, {
-          headers: {
-            "content-type": "text/html; charset=utf-8",
-            "x-robots-tag": NOINDEX,
-            "cache-control": NO_CACHE,
-            // Impede o token vazar no Referer ao clicar no botão do WhatsApp.
-            "referrer-policy": "no-referrer",
-            "x-content-type-options": "nosniff",
-          },
-        });
+      // Limite defensivo: não gastar hash com caminho absurdo.
+      if (rest.length > 0 && rest.length <= 200 && !rest.includes("/")) {
+        if (sameHex(await sha256Hex(rest), expected)) {
+          return new Response(PAGE, {
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+              "x-robots-tag": NOINDEX,
+              "cache-control": NO_CACHE,
+              // Impede o token vazar no Referer ao clicar no botão do WhatsApp.
+              "referrer-policy": "no-referrer",
+              "x-content-type-options": "nosniff",
+            },
+          });
+        }
       }
     }
 

@@ -44,13 +44,21 @@ wrangler.toml     configuração do Worker
 
 ## Deploy
 
-Uma vez, na conta do Cloudflare:
+Uma vez, na conta do Cloudflare. A ordem importa: o secret só pode ser
+gravado depois que o Worker existe.
 
 ```sh
 npx wrangler login
+npx wrangler deploy                    # cria o Worker (ainda da 404 em tudo)
 npx wrangler secret put ACCESS_TOKEN   # cola o token quando pedir
-npx wrangler deploy
 ```
+
+Enquanto o `ACCESS_TOKEN` não estiver gravado, o Worker responde 404 em todo
+caminho — inclusive no certo. Isso é proposital: sem token, nada é servido.
+
+O endereço sai no fim do `deploy`, na forma
+`https://vitanova-acesso.<seu-subdominio>.workers.dev`. A página fica em
+`/acesso/<token>` — a raiz é 404 de propósito.
 
 ---
 

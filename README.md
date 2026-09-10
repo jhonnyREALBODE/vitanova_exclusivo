@@ -62,6 +62,38 @@ O endereço sai no fim do `deploy`, na forma
 
 ---
 
+## Deu "Not found" / tela preta
+
+O Worker está no ar e respondendo — "Not found" é a resposta dele. Duas causas:
+
+**1. O secret não foi configurado.** Deploy pelo dashboard conectado ao Git
+não leva secrets junto: eles são gravados à parte, uma vez só. Nesse estado o
+Worker responde **503** com a instrução na tela. Para gravar pelo dashboard:
+
+> Cloudflare › Workers & Pages › `vitanova-acesso` › Settings ›
+> Variables and Secrets › Add › tipo **Secret** › nome `ACCESS_TOKEN` › Deploy
+
+Ou pelo terminal: `npx wrangler secret put ACCESS_TOKEN`.
+
+O secret sobrevive aos deploys seguintes — só se grava de novo ao trocar de
+turma.
+
+**2. Você abriu a raiz do site.** `/` é 404 de propósito. A página só existe em
+`/acesso/<token>`. Não há índice, nem link, nem redirecionamento — é isso que
+mantém o caminho secreto.
+
+Para saber qual dos dois é, sem adivinhar:
+
+```sh
+curl -i https://<seu-worker>.workers.dev/robots.txt
+```
+
+- **200** com `Disallow: /acesso/` → o Worker está certo; é secret ou caminho.
+- **503** → é o secret, e o corpo da resposta diz o que fazer.
+- Qualquer outra coisa → o repositório foi conectado como projeto **Pages** em
+  vez de **Worker**. Refaça em Workers & Pages › Create › Import a repository,
+  escolhendo Worker; o `wrangler.toml` cuida do resto.
+
 ## Abrindo uma turma nova
 
 Duas coisas mudam a cada turma: **o link do grupo** e **o token**. Sempre as

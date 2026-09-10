@@ -67,9 +67,25 @@ export default {
 
     const token = env.ACCESS_TOKEN;
     if (!token) {
-      // Secret não configurado: não serve a página, e diz por quê no log.
+      /* Sem o secret nada é servido — mas responder 404 aqui faz o erro de
+         configuração parecer token errado, e a pessoa fica caçando o token
+         quando o problema é outro. 503 diz o que é. Não vaza nada: a mensagem
+         não contém o token, e some assim que o secret é gravado. */
       console.error("ACCESS_TOKEN não configurado — nenhuma página será servida.");
-      return notFound();
+      return new Response(
+        "Worker no ar, mas o secret ACCESS_TOKEN nao foi configurado.\n" +
+          "Cloudflare > Workers & Pages > vitanova-acesso > Settings >\n" +
+          "Variables and Secrets > Add > tipo Secret > nome ACCESS_TOKEN.\n" +
+          "Ou: npx wrangler secret put ACCESS_TOKEN\n",
+        {
+          status: 503,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "x-robots-tag": NOINDEX,
+            "cache-control": NO_CACHE,
+          },
+        }
+      );
     }
 
     // Aceita /acesso/<token> e /acesso/<token>/ e nada mais.
